@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.10)
 
 project(dtrt VERSION 0.0.1 DESCRIPTION "Differentiable Radiative Transfer")
 
@@ -8,16 +8,24 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 if(WIN32)
     find_package(PythonLibs 3.6 COMPONENTS Development REQUIRED)
-    add_subdirectory(pybind11)
 else()
-    find_package(Python 3.6 COMPONENTS Development REQUIRED)
+    find_package(PythonInterp 3.6)
+    find_package(PythonLibs 3.6 COMPONENTS Development REQUIRED)
 endif()
+add_subdirectory(pybind11)
+include_directories(pybind11/include)
 
 find_package(Embree REQUIRED)
 if(NOT EMBREE_FOUND)
+    message(INFO 'Compiling Embree in subdirectory')
+    set(EMBREE_ISPC_SUPPORT OFF)
+    set(EMBREE_TUTORIALS OFF)
     add_subdirectory(embree)
+#    set(EMBREE_INCLUDE_PATH embree/include)
 endif()
 
 find_package(OpenMP REQUIRED)
@@ -29,8 +37,9 @@ endif()
 find_package(Eigen3 REQUIRED)
 include_directories(${EIGEN3_INCLUDE_DIR})
 
-include_directories(${Python_INCLUDE_DIRS})
-include_directories(${EMBREE_INCLUDE_PATH})
+message(STATUS ${PYTHON_INCLUDE_DIRS})
+include_directories(${PYTHON_INCLUDE_DIRS})
+#include_directories(${EMBREE_INCLUDE_PATH})
 include_directories(include/)
 
 if (MSVC)
@@ -129,8 +138,9 @@ if (NOT WIN32)
     # https://github.com/pybind/pybind11/blob/master/tools/pybind11Tools.cmake
     # is to not link against Python library at all and resolve the symbols
     # at compile time.
-    target_link_libraries(dtrt
-        ${EMBREE_LIBRARY}
+    target_link_libraries(dtrt PRIVATE
+            embree
+        #${EMBREE_LIBRARY}
         ${DYNAMIC_LOOKUP})
 else()
     target_link_libraries(dtrt
@@ -142,7 +152,7 @@ endif()
 set_target_properties(dtrt PROPERTIES PREFIX "")
 
 execute_process(
-    COMMAND "python" -c "if True:
+    COMMAND "python3" -c "if True:
         from distutils import sysconfig as sc
         print(sc.get_python_lib())"
     OUTPUT_VARIABLE PYTHON_SITE
@@ -159,3 +169,10 @@ execute_process (
     OUTPUT_STRIP_TRAILING_WHITESPACE)
 install(CODE "execute_process(COMMAND python${PYTHON_VERSION} ${CMAKE_CURRENT_SOURCE_DIR}/setup.py install
                               WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})")
+
+add_custom_command(TARGET dtrt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/pydtrt /home/user1/dtrt/dtrt_env/lib/python3.6/site-packages/pydtrt)
+add_custom_command(TARGET dtrt POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+        ${CMAKE_BINARY_DIR}/dtrt.so /home/user1/dtrt/dtrt_env/lib/python3.6/site-packages/dtrt.so)

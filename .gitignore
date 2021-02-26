@@ -22,5 +22,3 @@ examples/shadow_1/results
 examples/shadow_2/results
 dependencies/*
 build
-embree
-pybind11
